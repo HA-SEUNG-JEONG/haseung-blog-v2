@@ -1,0 +1,51 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { createPost, deletePost, publishPost, unpublishPost, signOut } from "./actions";
+
+export default async function AdminPage() {
+  const supabase = await createClient();
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("id, slug, title, is_draft, published_at, view_count")
+    .order("updated_at", { ascending: false });
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-xl font-bold">Posts</h1>
+        <form action={createPost} className="ml-auto">
+          <button className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white dark:bg-neutral-100 dark:text-black">
+            New post
+          </button>
+        </form>
+        <form action={signOut}>
+          <button className="text-sm text-neutral-500 hover:underline">Sign out</button>
+        </form>
+      </div>
+      <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
+        {(posts ?? []).map((post) => (
+          <li key={post.id} className="flex items-center gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <Link href={`/admin/edit/${post.id}`} className="font-semibold hover:underline">
+                {post.title || "(untitled)"}
+              </Link>
+              <p className="text-sm text-neutral-500">
+                {post.is_draft ? "draft" : `published ${post.published_at?.slice(0, 10)}`} ·{" "}
+                {post.view_count} views
+              </p>
+            </div>
+            <form action={(post.is_draft ? publishPost : unpublishPost).bind(null, post.id)}>
+              <button className="text-sm hover:underline">
+                {post.is_draft ? "Publish" : "Unpublish"}
+              </button>
+            </form>
+            <form action={deletePost.bind(null, post.id)}>
+              <button className="text-sm text-red-500 hover:underline">Delete</button>
+            </form>
+          </li>
+        ))}
+        {(posts ?? []).length === 0 && <li className="py-3 text-neutral-500">No posts.</li>}
+      </ul>
+    </div>
+  );
+}
