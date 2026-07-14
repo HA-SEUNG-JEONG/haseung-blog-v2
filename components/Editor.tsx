@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { updatePost } from "@/app/admin/actions";
 import { createClient } from "@/lib/supabase/client";
-import Markdown from "@/components/Markdown";
 import type { Post } from "@/lib/types";
 
 function toLocalInput(iso: string | null) {
@@ -58,6 +57,15 @@ export default function Editor({ post }: { post: Post }) {
     }, 1500);
     return () => clearTimeout(t);
   }, [title, slug, content, save]);
+
+  // warn before closing the tab with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirty.current) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
 
   // flush pending autosave on unmount
   useEffect(
@@ -148,8 +156,26 @@ export default function Editor({ post }: { post: Post }) {
     }
   }
 
+  // open preview in a new tab after flushing the current state (sync open beats popup blockers)
+  function openPreview() {
+    const win = window.open("", "_blank");
+    dirty.current = false;
+    save({ title, slug, content_md: content }).then(() => {
+      if (win) win.location.href = `/admin/edit/${post.id}/preview`;
+    });
+  }
+
   // --- publish controls ---
   async function publish() {
+    if (!slug.trim()) {
+      setStatus("error: slug is required");
+      return;
+    }
+    if (
+      slug.startsWith("draft-") &&
+      !confirm("slug가 자동 생성값(draft-…) 그대로입니다. 이대로 발행할까요?")
+    )
+      return;
     const iso = publishedAt ? new Date(publishedAt).toISOString() : new Date().toISOString();
     if (!publishedAt) setPublishedAt(toLocalInput(iso));
     const ok = await save({
@@ -251,8 +277,7 @@ export default function Editor({ post }: { post: Post }) {
         <span className="text-neutral-500">{isDraft ? "draft" : "published"}</span>
       </div>
 
-      <div className="grid min-h-[60vh] flex-1 grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="flex min-h-[60vh] flex-col overflow-hidden rounded-lg border border-neutral-300 dark:border-neutral-700">
+      <div className="flex min-h-[60vh] flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 dark:border-neutral-700">
           <div
             className="flex flex-wrap items-center gap-1 border-b border-neutral-200 px-2 py-1.5 dark:border-neutral-800"
             onMouseDown={(e) => e.preventDefault()}
@@ -284,6 +309,14 @@ export default function Editor({ post }: { post: Post }) {
                 e.target.value = "";
               }}
             />
+            <button
+              type="button"
+              title="Open preview in new tab"
+              onClick={openPreview}
+              className={`${toolBtnCls} ml-auto`}
+            >
+              Preview ↗
+            </button>
           </div>
           <textarea
             ref={textareaRef}
@@ -304,15 +337,6 @@ export default function Editor({ post }: { post: Post }) {
             placeholder="Write markdown… (paste or drop images/videos)"
             className="w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm focus:outline-none"
           />
-        </div>
-        <div className="flex min-h-[60vh] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="border-b border-neutral-200 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
-            Preview
-          </div>
-          <div className="flex-1 overflow-auto p-3">
-            <Markdown>{content}</Markdown>
-          </div>
-        </div>
       </div>
     </div>
   );

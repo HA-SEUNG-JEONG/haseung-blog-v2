@@ -17,7 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "haseung",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  title: { default: "haseung", template: "%s · haseung" },
   description: "haseung's dev blog",
 };
 
@@ -39,6 +40,18 @@ export default function RootLayout({
           <main className="mx-auto w-full max-w-3xl flex-1 p-4">
             {children}
           </main>
+          <footer className="border-t border-neutral-200 dark:border-neutral-800">
+            <div className="mx-auto w-full max-w-3xl p-4 text-sm text-neutral-500">
+              <a
+                href="https://github.com/HA-SEUNG-JEONG"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
+                GitHub
+              </a>
+            </div>
+          </footer>
         </ThemeProvider>
         {gaId && <GoogleAnalytics gaId={gaId} />}
       </body>

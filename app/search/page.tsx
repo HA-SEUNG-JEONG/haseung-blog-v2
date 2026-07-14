@@ -7,7 +7,9 @@ export default async function SearchPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
-  const query = (q ?? "").replace(/[%,()]/g, "").trim();
+  // strip ,() to protect PostgREST or() syntax; escape LIKE wildcards
+  const query = (q ?? "").replace(/[,()]/g, "").trim();
+  const pattern = query.replace(/[\\%_]/g, "\\$&");
 
   let posts: { id: string; slug: string; title: string; published_at: string | null }[] = [];
   if (query) {
@@ -16,7 +18,8 @@ export default async function SearchPage({
       .from("posts")
       .select("id, slug, title, published_at")
       .eq("is_draft", false)
-      .or(`title.ilike.%${query}%,content_md.ilike.%${query}%`)
+      .lte("published_at", new Date().toISOString())
+      .or(`title.ilike.%${pattern}%,content_md.ilike.%${pattern}%`)
       .order("published_at", { ascending: false });
     posts = data ?? [];
   }

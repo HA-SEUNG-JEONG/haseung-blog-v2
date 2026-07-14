@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import ConfirmButton from "@/components/ConfirmButton";
 import { createPost, deletePost, publishPost, unpublishPost, signOut } from "./actions";
 
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, error } = await searchParams;
   const showDrafts = tab === "drafts";
 
   const supabase = await createClient();
@@ -27,6 +28,11 @@ export default async function AdminPage({
 
   return (
     <div>
+      {error && (
+        <p className="mb-4 rounded bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
+          {error}
+        </p>
+      )}
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-xl font-bold">Posts</h1>
         <form action={createPost} className="ml-auto">
@@ -64,7 +70,12 @@ export default async function AdminPage({
               </button>
             </form>
             <form action={deletePost.bind(null, post.id)}>
-              <button className="text-sm text-red-500 hover:underline">Delete</button>
+              <ConfirmButton
+                message={`"${post.title || "(untitled)"}" 정말 삭제할까요? 되돌릴 수 없습니다.`}
+                className="text-sm text-red-500 hover:underline"
+              >
+                Delete
+              </ConfirmButton>
             </form>
           </li>
         ))}

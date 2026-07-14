@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import SearchInput from "./SearchInput";
 import ThemeToggle from "./ThemeToggle";
 
 export default function Navbar() {
@@ -9,12 +11,9 @@ export default function Navbar() {
           haseung
         </Link>
         <form action="/search" className="ml-auto">
-          <input
-            type="search"
-            name="q"
-            placeholder="Search…"
-            className="rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
-          />
+          <Suspense>
+            <SearchInput />
+          </Suspense>
         </form>
         <ThemeToggle />
       </div>

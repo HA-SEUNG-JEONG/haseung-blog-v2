@@ -21,7 +21,7 @@ create index idx_posts_published on posts (published_at desc) where is_draft = f
 
 -- atomic view increment, callable by anon
 create function increment_view(post_slug text) returns void
-language sql security definer as
+language sql security definer set search_path = public as
 $$ update posts set view_count = view_count + 1 where slug = post_slug and is_draft = false; $$;
 
 -- Storage: create bucket "uploads" (public) in dashboard, then:
@@ -32,3 +32,14 @@ create policy "auth write uploads" on storage.objects
 -- 1. Auth > Sign In / Up > disable "Allow new users to sign up"
 -- 2. Create the single admin user manually (Auth > Users > Add user)
 -- 3. Storage > New bucket "uploads", public
+
+-- MIGRATION (existing databases): re-run in SQL editor to pin search_path:
+--   create or replace function increment_view(post_slug text) returns void
+--   language sql security definer set search_path = public as
+--   $$ update posts set view_count = view_count + 1 where slug = post_slug and is_draft = false; $$;
+
+-- Optional hardening: the app hides scheduled posts (published_at > now()),
+-- but direct REST reads can still see them. To enforce at the DB:
+--   drop policy anon_read on posts;
+--   create policy anon_read on posts for select
+--     using (is_draft = false and published_at <= now());

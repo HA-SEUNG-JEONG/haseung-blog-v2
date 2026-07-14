@@ -1,11 +1,12 @@
+import SubmitButton from "@/components/SubmitButton";
 import { signIn } from "../actions";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; email?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, email } = await searchParams;
   return (
     <form action={signIn} className="mx-auto mt-16 flex max-w-sm flex-col gap-3">
       <h1 className="text-xl font-bold">Admin login</h1>
@@ -14,6 +15,7 @@ export default async function LoginPage({
         type="email"
         name="email"
         placeholder="Email"
+        defaultValue={email}
         required
         className="rounded border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
       />
@@ -24,12 +26,9 @@ export default async function LoginPage({
         required
         className="rounded border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
       />
-      <button
-        type="submit"
-        className="rounded bg-neutral-900 px-3 py-2 text-white dark:bg-neutral-100 dark:text-black"
-      >
+      <SubmitButton className="rounded bg-neutral-900 px-3 py-2 text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-black">
         Sign in
-      </button>
+      </SubmitButton>
     </form>
   );
 }
