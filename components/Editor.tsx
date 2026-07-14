@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { updatePost } from "@/app/admin/actions";
+import { useRouter } from "next/navigation";
+import { updatePost } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "./ConfirmDialog";
+import Markdown from "./Markdown";
 import type { Post } from "@/lib/types";
 
 function toLocalInput(iso: string | null) {
@@ -13,6 +15,7 @@ function toLocalInput(iso: string | null) {
 }
 
 export default function Editor({ post }: { post: Post }) {
+  const router = useRouter();
   const [title, setTitle] = useState(post.title);
   const [slug, setSlug] = useState(post.slug);
   const [content, setContent] = useState(post.content_md);
@@ -20,6 +23,8 @@ export default function Editor({ post }: { post: Post }) {
   const [publishedAt, setPublishedAt] = useState(toLocalInput(post.published_at));
   const [commentsEnabled, setCommentsEnabled] = useState(post.comments_enabled);
   const [status, setStatus] = useState("");
+  const [askPublish, setAskPublish] = useState(false);
+  const [preview, setPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,10 +38,12 @@ export default function Editor({ post }: { post: Post }) {
     [post.id]
   );
 
-  // --- autosave: content fields only, 1.5s after last keystroke ---
-  const latest = useRef({ title, slug, content });
+  // --- autosave: title/content only, 1.5s after last keystroke ---
+  // slug stays out: it is the route key, and autosaving a half-typed slug would
+  // strand this URL. It is committed on blur instead (see flush).
+  const latest = useRef({ title, content });
   useEffect(() => {
-    latest.current = { title, slug, content };
+    latest.current = { title, content };
   });
   const dirty = useRef(false);
   const firstRun = useRef(true);
@@ -49,14 +56,43 @@ export default function Editor({ post }: { post: Post }) {
     dirty.current = true;
     const t = setTimeout(() => {
       dirty.current = false;
-      save({
-        title: latest.current.title,
-        slug: latest.current.slug,
-        content_md: latest.current.content,
-      });
+      save({ title: latest.current.title, content_md: latest.current.content });
     }, 1500);
     return () => clearTimeout(t);
-  }, [title, slug, content, save]);
+  }, [title, content, save]);
+
+  // Commit everything pending in one write. The slug rides along so a rename can
+  // never land without the text that was typed next to it.
+  const savedSlug = useRef(post.slug);
+  const flush = useCallback(async () => {
+    dirty.current = false;
+    const next = slug.trim();
+    const renaming = next !== savedSlug.current;
+    const previous = savedSlug.current;
+
+    // Swap the URL *before* the write, not after: updatePost revalidates, Next refetches
+    // whatever URL is current, and the old slug is gone by then — that refetch 404s.
+    // history.replaceState (not router.replace) so the editor is never remounted mid-edit.
+    if (renaming) {
+      savedSlug.current = next;
+      window.history.replaceState({}, "", `/posts/${encodeURIComponent(next)}?edit=1`);
+    }
+
+    const ok = await save({
+      title,
+      content_md: content,
+      ...(renaming ? { slug: next } : {}),
+    });
+
+    if (renaming && !ok) {
+      // slug taken or invalid — put the URL back on the row that still exists
+      savedSlug.current = previous;
+      window.history.replaceState({}, "", `/posts/${encodeURIComponent(previous)}?edit=1`);
+    } else if (renaming) {
+      setSlug(next);
+    }
+    return ok;
+  }, [save, slug, title, content]);
 
   // warn before closing the tab with unsaved changes
   useEffect(() => {
@@ -73,7 +109,6 @@ export default function Editor({ post }: { post: Post }) {
       if (dirty.current)
         updatePost(post.id, {
           title: latest.current.title,
-          slug: latest.current.slug,
           content_md: latest.current.content,
         });
     },
@@ -156,41 +191,43 @@ export default function Editor({ post }: { post: Post }) {
     }
   }
 
-  // open preview in a new tab after flushing the current state (sync open beats popup blockers)
-  function openPreview() {
-    const win = window.open("", "_blank");
-    dirty.current = false;
-    save({ title, slug, content_md: content }).then(() => {
-      if (win) win.location.href = `/admin/edit/${post.id}/preview`;
-    });
+  // leave edit mode: flush pending edits, then land on the post itself (which is the preview now)
+  async function done() {
+    await flush();
+    router.push(`/posts/${encodeURIComponent(savedSlug.current)}`);
   }
 
   // --- publish controls ---
-  async function publish() {
+  function publish() {
     if (!slug.trim()) {
       setStatus("error: slug is required");
       return;
     }
-    if (
-      slug.startsWith("draft-") &&
-      !confirm("slug가 자동 생성값(draft-…) 그대로입니다. 이대로 발행할까요?")
-    )
+    if (slug.startsWith("draft-")) {
+      setAskPublish(true); // slug is still the auto-generated one — confirm first
       return;
+    }
+    doPublish();
+  }
+
+  async function doPublish() {
+    setAskPublish(false);
+    if (!(await flush())) return; // slug/title/content land first, then the publish flags
     const iso = publishedAt ? new Date(publishedAt).toISOString() : new Date().toISOString();
     if (!publishedAt) setPublishedAt(toLocalInput(iso));
-    const ok = await save({
-      is_draft: false,
-      published_at: iso,
-      title,
-      slug,
-      content_md: content,
-    });
-    if (ok) setIsDraft(false);
+    const ok = await save({ is_draft: false, published_at: iso });
+    if (ok) {
+      setIsDraft(false);
+      router.refresh();
+    }
   }
 
   async function unpublish() {
     const ok = await save({ is_draft: true });
-    if (ok) setIsDraft(true);
+    if (ok) {
+      setIsDraft(true);
+      router.refresh();
+    }
   }
 
   const inputCls =
@@ -214,9 +251,9 @@ export default function Editor({ post }: { post: Post }) {
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="flex items-center gap-3">
-        <Link href="/admin" className="text-sm text-neutral-500 hover:underline">
-          ← Posts
-        </Link>
+        <button onClick={done} className="text-sm text-neutral-500 hover:underline">
+          ← Done
+        </button>
         {status && (
           <span className="ml-auto rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
             {status}
@@ -233,6 +270,7 @@ export default function Editor({ post }: { post: Post }) {
       <input
         value={slug}
         onChange={(e) => setSlug(e.target.value)}
+        onBlur={flush}
         placeholder="slug"
         className={`${inputCls} font-mono`}
       />
@@ -311,33 +349,53 @@ export default function Editor({ post }: { post: Post }) {
             />
             <button
               type="button"
-              title="Open preview in new tab"
-              onClick={openPreview}
-              className={`${toolBtnCls} ml-auto`}
+              title="Toggle live preview"
+              onClick={() => setPreview((p) => !p)}
+              aria-pressed={preview}
+              className={`${toolBtnCls} ml-auto ${
+                preview ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100" : ""
+              }`}
             >
-              Preview ↗
+              Preview
             </button>
           </div>
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleShortcut}
-            onPaste={(e) => {
-              if (e.clipboardData.files.length) {
+          <div className="flex flex-1 overflow-hidden">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleShortcut}
+              onPaste={(e) => {
+                if (e.clipboardData.files.length) {
+                  e.preventDefault();
+                  uploadFiles(e.clipboardData.files);
+                }
+              }}
+              onDrop={(e) => {
                 e.preventDefault();
-                uploadFiles(e.clipboardData.files);
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              uploadFiles(e.dataTransfer.files);
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            placeholder="Write markdown… (paste or drop images/videos)"
-            className="w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm focus:outline-none"
-          />
+                uploadFiles(e.dataTransfer.files);
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              placeholder="Write markdown… (paste or drop images/videos)"
+              className={`flex-1 resize-none bg-transparent p-3 font-mono text-sm focus:outline-none ${
+                preview ? "w-1/2" : "w-full"
+              }`}
+            />
+            {preview && (
+              <div className="w-1/2 overflow-y-auto border-l border-neutral-200 p-3 dark:border-neutral-800">
+                <Markdown>{content}</Markdown>
+              </div>
+            )}
+          </div>
       </div>
+
+      <ConfirmDialog
+        open={askPublish}
+        message={"slug가 자동 생성값(draft-…) 그대로입니다.\n이대로 발행할까요?"}
+        confirmLabel="발행"
+        onCancel={() => setAskPublish(false)}
+        onConfirm={doPublish}
+      />
     </div>
   );
 }
