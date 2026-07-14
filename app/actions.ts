@@ -55,18 +55,21 @@ const UPDATABLE = [
   "comments_enabled",
 ] as const;
 
-// Returns an error message or null. Allowlist keeps view_count/created_at untouchable.
+// Returns an error or null. `field` lets the editor render the message next to the input it belongs
+// to. Allowlist keeps view_count/created_at untouchable.
+export type UpdateError = { field: "slug" | null; message: string };
+
 export async function updatePost(
   id: string,
   patch: Partial<Record<(typeof UPDATABLE)[number], unknown>>
-) {
+): Promise<UpdateError | null> {
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const key of UPDATABLE) if (key in patch) update[key] = patch[key];
 
   if ("slug" in update) {
     const slug = String(update.slug ?? "").trim();
-    if (!slug) return "slug is required";
-    if (slug.includes("/")) return "slug cannot contain '/'";
+    if (!slug) return { field: "slug", message: "slug을 입력해 주세요." };
+    if (slug.includes("/")) return { field: "slug", message: "slug에 '/'는 쓸 수 없습니다." };
     update.slug = slug;
   }
 
@@ -76,7 +79,9 @@ export async function updatePost(
     revalidatePath("/", "layout");
     return null;
   }
-  return error.code === "23505" ? "slug already exists" : error.message;
+  return error.code === "23505"
+    ? { field: "slug", message: "이미 사용 중인 slug입니다." }
+    : { field: null, message: error.message };
 }
 
 export async function publishPost(id: string) {

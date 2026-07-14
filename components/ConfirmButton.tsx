@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import ConfirmDialog from "./ConfirmDialog";
 
 // Submit button for a server-component <form action> that asks before submitting.
@@ -20,10 +21,17 @@ export default function ConfirmButton({
 }) {
   const [open, setOpen] = useState(false);
   const submitRef = useRef<HTMLButtonElement>(null);
+  const { pending } = useFormStatus(); // the enclosing server-action form — blocks a second submit
 
   return (
     <>
-      <button type="button" className={className} onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className={className}
+        disabled={pending}
+        aria-busy={pending}
+        onClick={() => setOpen(true)}
+      >
         {children}
       </button>
       <button ref={submitRef} type="submit" className="hidden" aria-hidden tabIndex={-1} />

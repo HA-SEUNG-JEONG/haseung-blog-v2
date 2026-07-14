@@ -1,3 +1,10 @@
+// Fixed locale + timezone so server and client render the same string (no hydration mismatch).
+const dateFmt = new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" });
+
+export function formatDate(iso: string | null): string {
+  return iso ? dateFmt.format(new Date(iso)) : "";
+}
+
 // Rough markdown/HTML stripper for excerpts and meta descriptions.
 export function stripMarkdown(md: string, maxLen: number): string {
   const text = md

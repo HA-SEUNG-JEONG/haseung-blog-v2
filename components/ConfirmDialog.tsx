@@ -31,7 +31,7 @@ export default function ConfirmDialog({
     <dialog
       ref={ref}
       onClose={onCancel}
-      className="m-auto w-[min(90vw,24rem)] rounded-lg border border-neutral-200 bg-white p-5 text-neutral-900 shadow-xl backdrop:bg-black/40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+      className="m-auto w-[min(90vw,24rem)] overscroll-contain rounded-lg border border-neutral-200 bg-white p-5 text-neutral-900 shadow-xl backdrop:bg-black/40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
     >
       <p className="text-sm whitespace-pre-line">{message}</p>
       <div className="mt-5 flex justify-end gap-2">

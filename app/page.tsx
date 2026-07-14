@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { stripMarkdown } from "@/lib/text";
+import { formatDate, stripMarkdown } from "@/lib/text";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -18,10 +18,10 @@ export default async function Home() {
         return (
           <li key={post.id} className="py-4">
             <Link href={`/posts/${post.slug}`} className="text-lg font-semibold hover:underline">
-              {post.title || "(untitled)"}
+              {post.title || "(제목 없음)"}
             </Link>
-            <p className="text-sm text-neutral-500">
-              {post.published_at?.slice(0, 10)} · {post.view_count} views
+            <p className="text-sm text-neutral-500 tabular-nums">
+              {formatDate(post.published_at)} · 조회 {post.view_count}
             </p>
             {excerpt && (
               <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{excerpt}</p>
@@ -30,7 +30,7 @@ export default async function Home() {
         );
       })}
       {(posts ?? []).length === 0 && (
-        <li className="py-4 text-neutral-500">No posts yet.</li>
+        <li className="py-4 text-neutral-500">아직 글이 없습니다.</li>
       )}
     </ul>
   );

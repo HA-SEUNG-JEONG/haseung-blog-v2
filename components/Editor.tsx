@@ -14,25 +14,47 @@ function toLocalInput(iso: string | null) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
-export default function Editor({ post }: { post: Post }) {
+// the editor owns this URL: slug renames and the preview toggle both rewrite it in place
+function editUrl(slug: string, preview: boolean) {
+  return `/posts/${encodeURIComponent(slug)}?edit=1${preview ? "&preview=1" : ""}`;
+}
+
+export default function Editor({
+  post,
+  initialPreview = false,
+}: {
+  post: Post;
+  initialPreview?: boolean;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState(post.title);
   const [slug, setSlug] = useState(post.slug);
+  const [slugError, setSlugError] = useState("");
   const [content, setContent] = useState(post.content_md);
   const [isDraft, setIsDraft] = useState(post.is_draft);
   const [publishedAt, setPublishedAt] = useState(toLocalInput(post.published_at));
   const [commentsEnabled, setCommentsEnabled] = useState(post.comments_enabled);
   const [status, setStatus] = useState("");
   const [askPublish, setAskPublish] = useState(false);
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(initialPreview);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const slugRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const save = useCallback(
     async (patch: Parameters<typeof updatePost>[1]) => {
-      setStatus("saving…");
+      setStatus("저장 중…");
       const error = await updatePost(post.id, patch);
-      setStatus(error ? `error: ${error}` : `saved ${new Date().toLocaleTimeString()}`);
+      setStatus(
+        error ? `오류: ${error.message}` : `저장됨 ${new Date().toLocaleTimeString("ko-KR")}`
+      );
+      // slug errors belong next to the slug field, not in the status pill
+      if (error?.field === "slug") {
+        setSlugError(error.message);
+        slugRef.current?.focus();
+      } else if (!error) {
+        setSlugError("");
+      }
       return !error;
     },
     [post.id]
@@ -75,7 +97,7 @@ export default function Editor({ post }: { post: Post }) {
     // history.replaceState (not router.replace) so the editor is never remounted mid-edit.
     if (renaming) {
       savedSlug.current = next;
-      window.history.replaceState({}, "", `/posts/${encodeURIComponent(next)}?edit=1`);
+      window.history.replaceState({}, "", editUrl(next, preview));
     }
 
     const ok = await save({
@@ -87,12 +109,12 @@ export default function Editor({ post }: { post: Post }) {
     if (renaming && !ok) {
       // slug taken or invalid — put the URL back on the row that still exists
       savedSlug.current = previous;
-      window.history.replaceState({}, "", `/posts/${encodeURIComponent(previous)}?edit=1`);
+      window.history.replaceState({}, "", editUrl(previous, preview));
     } else if (renaming) {
       setSlug(next);
     }
     return ok;
-  }, [save, slug, title, content]);
+  }, [save, slug, title, content, preview]);
 
   // warn before closing the tab with unsaved changes
   useEffect(() => {
@@ -114,6 +136,12 @@ export default function Editor({ post }: { post: Post }) {
     },
     [post.id]
   );
+
+  function togglePreview() {
+    const next = !preview;
+    setPreview(next);
+    window.history.replaceState({}, "", editUrl(savedSlug.current, next));
+  }
 
   // --- paste/drop upload to Supabase Storage ---
   function insertAtCursor(text: string) {
@@ -162,9 +190,9 @@ export default function Editor({ post }: { post: Post }) {
   function handleShortcut(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (!(e.metaKey || e.ctrlKey)) return;
     const key = e.key.toLowerCase();
-    if (key === "b") wrapSelection("**", "**", "bold");
-    else if (key === "i") wrapSelection("*", "*", "italic");
-    else if (key === "k") wrapSelection("[", "](url)", "text");
+    if (key === "b") wrapSelection("**", "**", "굵게");
+    else if (key === "i") wrapSelection("*", "*", "기울임");
+    else if (key === "k") wrapSelection("[", "](url)", "텍스트");
     else return;
     e.preventDefault();
   }
@@ -173,12 +201,12 @@ export default function Editor({ post }: { post: Post }) {
     const supabase = createClient();
     for (const file of files) {
       if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
-      setStatus("uploading…");
+      setStatus("업로드 중…");
       const ext = file.name.split(".").pop() || "bin";
       const path = `${post.id}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from("uploads").upload(path, file);
       if (error) {
-        setStatus(`upload error: ${error.message}`);
+        setStatus(`업로드 오류: ${error.message}`);
         continue;
       }
       const { data } = supabase.storage.from("uploads").getPublicUrl(path);
@@ -187,7 +215,7 @@ export default function Editor({ post }: { post: Post }) {
           ? `<video controls src="${data.publicUrl}"></video>`
           : `![](${data.publicUrl})`
       );
-      setStatus("uploaded");
+      setStatus("업로드 완료");
     }
   }
 
@@ -200,7 +228,8 @@ export default function Editor({ post }: { post: Post }) {
   // --- publish controls ---
   function publish() {
     if (!slug.trim()) {
-      setStatus("error: slug is required");
+      setSlugError("slug을 입력해 주세요.");
+      slugRef.current?.focus();
       return;
     }
     if (slug.startsWith("draft-")) {
@@ -230,54 +259,74 @@ export default function Editor({ post }: { post: Post }) {
     }
   }
 
+  // text-base on mobile: anything under 16px makes iOS Safari zoom on focus
   const inputCls =
-    "rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700";
+    "rounded border border-neutral-300 bg-transparent px-2 py-1 text-base sm:text-sm dark:border-neutral-700";
   const toolBtnCls =
-    "rounded px-1.5 py-0.5 text-sm text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100";
+    "inline-flex h-7 min-w-7 items-center justify-center rounded px-1.5 text-sm text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100";
 
   const toolbar: { label: React.ReactNode; title: string; run: () => void }[] = [
-    { label: <strong>B</strong>, title: "Bold (⌘B)", run: () => wrapSelection("**", "**", "bold") },
-    { label: <em>I</em>, title: "Italic (⌘I)", run: () => wrapSelection("*", "*", "italic") },
-    { label: <s>S</s>, title: "Strikethrough", run: () => wrapSelection("~~", "~~", "strike") },
-    { label: "H2", title: "Heading 2", run: () => prefixLines("## ") },
-    { label: "H3", title: "Heading 3", run: () => prefixLines("### ") },
-    { label: "🔗", title: "Link (⌘K)", run: () => wrapSelection("[", "](url)", "text") },
-    { label: "`code`", title: "Inline code", run: () => wrapSelection("`", "`", "code") },
-    { label: "```", title: "Code block", run: () => wrapSelection("```\n", "\n```", "code") },
-    { label: ">", title: "Quote", run: () => prefixLines("> ") },
-    { label: "•", title: "List", run: () => prefixLines("- ") },
+    { label: <strong>B</strong>, title: "굵게 (⌘B)", run: () => wrapSelection("**", "**", "굵게") },
+    { label: <em>I</em>, title: "기울임 (⌘I)", run: () => wrapSelection("*", "*", "기울임") },
+    { label: <s>S</s>, title: "취소선", run: () => wrapSelection("~~", "~~", "취소선") },
+    { label: "H2", title: "제목 2", run: () => prefixLines("## ") },
+    { label: "H3", title: "제목 3", run: () => prefixLines("### ") },
+    { label: "🔗", title: "링크 (⌘K)", run: () => wrapSelection("[", "](url)", "텍스트") },
+    { label: "`code`", title: "인라인 코드", run: () => wrapSelection("`", "`", "code") },
+    { label: "```", title: "코드 블록", run: () => wrapSelection("```\n", "\n```", "code") },
+    { label: ">", title: "인용", run: () => prefixLines("> ") },
+    { label: "•", title: "목록", run: () => prefixLines("- ") },
   ];
 
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="flex items-center gap-3">
         <button onClick={done} className="text-sm text-neutral-500 hover:underline">
-          ← Done
+          ← 완료
         </button>
-        {status && (
-          <span className="ml-auto rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-            {status}
-          </span>
-        )}
+        <span
+          role="status"
+          aria-live="polite"
+          className={`ml-auto text-xs ${
+            status
+              ? "rounded-full bg-neutral-100 px-2.5 py-0.5 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+              : ""
+          }`}
+        >
+          {status}
+        </span>
       </div>
 
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Title"
+        placeholder="제목"
+        aria-label="제목"
         className="border-b border-neutral-200 bg-transparent px-1 py-2 text-2xl font-bold focus:border-neutral-400 focus:outline-none dark:border-neutral-800 dark:focus:border-neutral-600"
       />
-      <input
-        value={slug}
-        onChange={(e) => setSlug(e.target.value)}
-        onBlur={flush}
-        placeholder="slug"
-        className={`${inputCls} font-mono`}
-      />
+      <div>
+        <input
+          ref={slugRef}
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          onBlur={flush}
+          placeholder="slug"
+          aria-label="slug"
+          aria-invalid={!!slugError}
+          aria-describedby={slugError ? "slug-error" : undefined}
+          spellCheck={false}
+          className={`${inputCls} w-full font-mono ${slugError ? "border-red-500 dark:border-red-500" : ""}`}
+        />
+        {slugError && (
+          <p id="slug-error" className="mt-1 text-sm text-red-600 dark:text-red-400">
+            {slugError}
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <label className="flex items-center gap-2">
-          published at
+          발행 시각
           <input
             type="datetime-local"
             value={publishedAt}
@@ -298,21 +347,21 @@ export default function Editor({ post }: { post: Post }) {
               save({ comments_enabled: e.target.checked });
             }}
           />
-          comments
+          댓글
         </label>
         {isDraft ? (
           <button
             onClick={publish}
             className="rounded bg-neutral-900 px-3 py-1 text-white dark:bg-neutral-100 dark:text-black"
           >
-            Publish
+            발행
           </button>
         ) : (
           <button onClick={unpublish} className="rounded border px-3 py-1">
-            Unpublish
+            발행 취소
           </button>
         )}
-        <span className="text-neutral-500">{isDraft ? "draft" : "published"}</span>
+        <span className="text-neutral-500">{isDraft ? "초안" : "발행됨"}</span>
       </div>
 
       <div className="flex min-h-[60vh] flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 dark:border-neutral-700">
@@ -324,13 +373,21 @@ export default function Editor({ post }: { post: Post }) {
               Markdown
             </span>
             {toolbar.map((t) => (
-              <button key={t.title} type="button" title={t.title} onClick={t.run} className={toolBtnCls}>
+              <button
+                key={t.title}
+                type="button"
+                title={t.title}
+                aria-label={t.title}
+                onClick={t.run}
+                className={toolBtnCls}
+              >
                 {t.label}
               </button>
             ))}
             <button
               type="button"
-              title="Upload image/video"
+              title="이미지·비디오 업로드"
+              aria-label="이미지·비디오 업로드"
               onClick={() => fileInputRef.current?.click()}
               className={toolBtnCls}
             >
@@ -349,17 +406,19 @@ export default function Editor({ post }: { post: Post }) {
             />
             <button
               type="button"
-              title="Toggle live preview"
-              onClick={() => setPreview((p) => !p)}
+              title="미리보기"
+              aria-label="미리보기"
+              onClick={togglePreview}
               aria-pressed={preview}
               className={`${toolBtnCls} ml-auto ${
                 preview ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100" : ""
               }`}
             >
-              Preview
+              미리보기
             </button>
           </div>
           <div className="flex flex-1 overflow-hidden">
+            {/* under sm the preview replaces the textarea — two half-width panes at 375px are unusable */}
             <textarea
               ref={textareaRef}
               value={content}
@@ -376,13 +435,13 @@ export default function Editor({ post }: { post: Post }) {
                 uploadFiles(e.dataTransfer.files);
               }}
               onDragOver={(e) => e.preventDefault()}
-              placeholder="Write markdown… (paste or drop images/videos)"
-              className={`flex-1 resize-none bg-transparent p-3 font-mono text-sm focus:outline-none ${
-                preview ? "w-1/2" : "w-full"
+              placeholder="마크다운으로 작성하세요… (이미지·비디오는 붙여넣기/드롭)"
+              className={`resize-none bg-transparent p-3 font-mono text-base focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 sm:text-sm ${
+                preview ? "hidden sm:block sm:w-1/2" : "w-full"
               }`}
             />
             {preview && (
-              <div className="w-1/2 overflow-y-auto border-l border-neutral-200 p-3 dark:border-neutral-800">
+              <div className="w-full overflow-y-auto border-neutral-200 p-3 sm:w-1/2 sm:border-l dark:border-neutral-800">
                 <Markdown>{content}</Markdown>
               </div>
             )}

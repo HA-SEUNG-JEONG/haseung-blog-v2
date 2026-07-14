@@ -12,7 +12,7 @@ export default async function Navbar() {
 
   return (
     <nav className="border-b border-neutral-200 dark:border-neutral-800">
-      <div className="mx-auto flex w-full max-w-3xl items-center gap-4 p-4">
+      <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 p-4">
         <Link href="/" className="font-bold">
           haseung
         </Link>
@@ -24,10 +24,10 @@ export default async function Navbar() {
         {user && (
           <>
             <form action={createPost}>
-              <button className={linkCls}>New post</button>
+              <button className={linkCls}>새 글</button>
             </form>
             <form action={signOut}>
-              <button className={linkCls}>Sign out</button>
+              <button className={linkCls}>로그아웃</button>
             </form>
           </>
         )}
