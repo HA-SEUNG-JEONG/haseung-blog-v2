@@ -16,6 +16,12 @@ export default async function Navbar() {
         <Link href="/" className="font-bold">
           haseung
         </Link>
+        <Link href="/archive" className={linkCls}>
+          아카이브
+        </Link>
+        <a href="/feed.xml" className={linkCls}>
+          RSS
+        </a>
         <form action="/search" className="ml-auto">
           <Suspense>
             <SearchInput />
