@@ -20,3 +20,9 @@ export function stripMarkdown(md: string, maxLen: number): string {
     .trim();
   return text.length > maxLen ? `${text.slice(0, maxLen - 1).trimEnd()}…` : text;
 }
+
+// Reading time from character count (~500 Korean chars/min), floor of 1 minute.
+export function readingMinutes(chars: number): number {
+  return Math.max(1, Math.round(chars / 500));
+}
+// demo: readingMinutes(0) === 1, readingMinutes(1500) === 3

@@ -45,16 +45,25 @@ begin
 end;
 $$;
 
+-- Tags: array column + GIN index for contains/overlaps queries. Single author, so
+-- no join table / tag-management UI — a text[] on the post is enough.
+alter table posts add column tags text[] not null default '{}';
+create index idx_posts_tags on posts using gin (tags);
+
 -- Home list: server-side excerpt (no full content_md over the wire) + row cap.
 -- stable, no security definer => RLS anon_read still applies.
-create function list_home_posts(lim int)
-returns table (id uuid, slug text, title text, published_at timestamptz, view_count int, excerpt text)
+-- Returns tags + char_count (reading time) and takes an offset (pagination).
+drop function if exists list_home_posts(int);
+create function list_home_posts(lim int, off int default 0)
+returns table (id uuid, slug text, title text, published_at timestamptz,
+               view_count int, excerpt text, tags text[], char_count int)
 language sql stable set search_path = public as $$
-  select id, slug, title, published_at, view_count, left(content_md, 300) as excerpt
+  select id, slug, title, published_at, view_count,
+         left(content_md, 300) as excerpt, tags, char_length(content_md) as char_count
   from posts
   where is_draft = false and published_at <= now()
   order by published_at desc
-  limit lim;
+  limit lim offset off;
 $$;
 
 -- Storage: create bucket "uploads" (public) in dashboard, then:

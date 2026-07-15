@@ -31,6 +31,11 @@ body {
   touch-action: manipulation;
 }
 
+/* TOC anchor jumps shouldn't land headings flush against the viewport top */
+.prose :where(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 1rem;
+}
+
 /* highlight.js GitHub Dark, scoped to next-themes' .dark class so the light
    theme (imported above) shows in light mode. Structural rules (padding,
    overflow) are theme-independent and already come from the light import;
