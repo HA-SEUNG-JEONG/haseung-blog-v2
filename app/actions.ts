@@ -55,6 +55,7 @@ const UPDATABLE = [
   "is_draft",
   "published_at",
   "comments_enabled",
+  "tags",
 ] as const;
 
 // Returns an error or null. `field` lets the editor render the message next to the input it belongs

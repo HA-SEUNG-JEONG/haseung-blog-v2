@@ -6,6 +6,7 @@ export type Post = {
   is_draft: boolean;
   published_at: string | null;
   comments_enabled: boolean;
+  tags: string[];
   view_count: number;
   created_at: string;
   updated_at: string;
