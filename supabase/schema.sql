@@ -19,10 +19,43 @@ create policy admin_all on posts for all using (auth.role() = 'authenticated');
 
 create index idx_posts_published on posts (published_at desc) where is_draft = false;
 
--- atomic view increment, callable by anon
-create function increment_view(post_slug text) returns void
-language sql security definer set search_path = public as
-$$ update posts set view_count = view_count + 1 where slug = post_slug and is_draft = false; $$;
+-- One row per (post, viewer, day) => a repeat view the same day is a no-op.
+-- viewer_hash is sha256(ip + day + secret) computed server-side (see app/api/view);
+-- the raw IP never reaches the DB. RLS on, no anon insert policy: the only way in
+-- is record_view (security definer), so clients can't forge rows or bump counts directly.
+create table post_views (
+  slug text not null,
+  viewer_hash text not null,
+  day date not null,
+  primary key (slug, viewer_hash, day)
+);
+alter table post_views enable row level security;
+
+-- Records a view and bumps view_count only when the (slug, viewer, day) row is new.
+create function record_view(post_slug text, viewer_hash text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into post_views (slug, viewer_hash, day)
+  values (post_slug, viewer_hash, current_date)
+  on conflict do nothing;
+  if found then
+    update posts set view_count = view_count + 1
+    where slug = post_slug and is_draft = false;
+  end if;
+end;
+$$;
+
+-- Home list: server-side excerpt (no full content_md over the wire) + row cap.
+-- stable, no security definer => RLS anon_read still applies.
+create function list_home_posts(lim int)
+returns table (id uuid, slug text, title text, published_at timestamptz, view_count int, excerpt text)
+language sql stable set search_path = public as $$
+  select id, slug, title, published_at, view_count, left(content_md, 300) as excerpt
+  from posts
+  where is_draft = false and published_at <= now()
+  order by published_at desc
+  limit lim;
+$$;
 
 -- Storage: create bucket "uploads" (public) in dashboard, then:
 create policy "auth write uploads" on storage.objects
@@ -33,10 +66,9 @@ create policy "auth write uploads" on storage.objects
 -- 2. Create the single admin user manually (Auth > Users > Add user)
 -- 3. Storage > New bucket "uploads", public
 
--- MIGRATION (existing databases): re-run in SQL editor to pin search_path:
---   create or replace function increment_view(post_slug text) returns void
---   language sql security definer set search_path = public as
---   $$ update posts set view_count = view_count + 1 where slug = post_slug and is_draft = false; $$;
+-- MIGRATION (existing databases): run the post_views table + record_view and
+-- list_home_posts function blocks above in the SQL editor, then drop the old RPC:
+--   drop function if exists increment_view(text);
 
 -- Optional hardening: the app hides scheduled posts (published_at > now()),
 -- but direct REST reads can still see them. To enforce at the DB:

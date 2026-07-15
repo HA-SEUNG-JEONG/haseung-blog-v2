@@ -26,7 +26,8 @@ export default async function SearchPage({ searchParams }: Props) {
       .eq("is_draft", false)
       .lte("published_at", new Date().toISOString())
       .or(`title.ilike.%${pattern}%,content_md.ilike.%${pattern}%`)
-      .order("published_at", { ascending: false });
+      .order("published_at", { ascending: false })
+      .limit(50);
     posts = data ?? [];
   }
 

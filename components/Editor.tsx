@@ -63,9 +63,9 @@ export default function Editor({
   // --- autosave: title/content only, 1.5s after last keystroke ---
   // slug stays out: it is the route key, and autosaving a half-typed slug would
   // strand this URL. It is committed on blur instead (see flush).
-  const latest = useRef({ title, content });
+  const latest = useRef({ title, content, slug });
   useEffect(() => {
-    latest.current = { title, content };
+    latest.current = { title, content, slug };
   });
   const dirty = useRef(false);
   const firstRun = useRef(true);
@@ -116,22 +116,28 @@ export default function Editor({
     return ok;
   }, [save, slug, title, content, preview]);
 
-  // warn before closing the tab with unsaved changes
+  // warn before closing the tab with unsaved changes. dirty covers title/content;
+  // slug is separate (it autosaves on blur, not on keystroke), so an uncommitted
+  // rename with no blur must be caught explicitly or it would leave silently.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (dirty.current) e.preventDefault();
+      if (dirty.current || latest.current.slug.trim() !== savedSlug.current)
+        e.preventDefault();
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  // flush pending autosave on unmount
+  // flush pending edits on unmount — best effort. A slug typed but never blurred
+  // rides along so it isn't lost (if the write fails, same outcome as before).
   useEffect(
     () => () => {
-      if (dirty.current)
+      const slugChanged = latest.current.slug.trim() !== savedSlug.current;
+      if (dirty.current || slugChanged)
         updatePost(post.id, {
           title: latest.current.title,
           content_md: latest.current.content,
+          ...(slugChanged ? { slug: latest.current.slug.trim() } : {}),
         });
     },
     [post.id]

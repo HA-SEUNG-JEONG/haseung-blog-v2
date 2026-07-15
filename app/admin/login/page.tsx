@@ -7,9 +7,9 @@ export const metadata: Metadata = { title: "관리자 로그인" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; email?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, email } = await searchParams;
+  const { error } = await searchParams;
   return (
     <form action={signIn} className="mx-auto mt-16 flex max-w-sm flex-col gap-3">
       <h1 className="text-xl font-bold">관리자 로그인</h1>
@@ -26,7 +26,6 @@ export default async function LoginPage({
         autoFocus
         placeholder="이메일"
         aria-label="이메일"
-        defaultValue={email}
         required
         className="rounded border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
       />

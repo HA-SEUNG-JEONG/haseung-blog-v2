@@ -2,19 +2,26 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, stripMarkdown } from "@/lib/text";
 
+type HomePost = {
+  id: string;
+  slug: string;
+  title: string;
+  published_at: string | null;
+  view_count: number;
+  excerpt: string;
+};
+
 export default async function Home() {
   const supabase = await createClient();
-  const { data: posts } = await supabase
-    .from("posts")
-    .select("id, slug, title, published_at, view_count, content_md")
-    .eq("is_draft", false)
-    .lte("published_at", new Date().toISOString())
-    .order("published_at", { ascending: false });
+  // RPC returns a server-side left(content_md, 300) excerpt so the full body never
+  // ships to the client, and caps the list at 30.
+  const { data } = await supabase.rpc("list_home_posts", { lim: 30 });
+  const posts = (data ?? []) as HomePost[];
 
   return (
     <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
       {(posts ?? []).map((post) => {
-        const excerpt = stripMarkdown(post.content_md, 120);
+        const excerpt = stripMarkdown(post.excerpt ?? "", 120);
         return (
           <li key={post.id} className="py-4">
             <Link href={`/posts/${post.slug}`} className="text-lg font-semibold hover:underline">

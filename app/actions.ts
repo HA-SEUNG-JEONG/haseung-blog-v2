@@ -22,7 +22,8 @@ export async function signIn(formData: FormData) {
     email,
     password: String(formData.get("password")),
   });
-  if (error) redirect(`/admin/login?error=1&email=${encodeURIComponent(email)}`);
+  // no email in the URL — it lands in history and server logs
+  if (error) redirect("/admin/login?error=1");
   redirect("/");
 }
 
