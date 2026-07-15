@@ -9,7 +9,7 @@ export default function ThemeToggle() {
 
   return (
     <button
-      aria-label="Toggle theme"
+      aria-label="테마 전환"
       className="w-8 text-lg"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >

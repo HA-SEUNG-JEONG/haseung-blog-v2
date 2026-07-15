@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { GoogleAnalytics } from "@next/third-parties/google";
@@ -22,6 +22,14 @@ export const metadata: Metadata = {
   description: "haseung's dev blog",
 };
 
+// browser chrome matches the page background in both themes
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,9 +43,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:rounded focus:bg-neutral-900 focus:px-3 focus:py-2 focus:text-white dark:focus:bg-neutral-100 dark:focus:text-black"
+        >
+          본문으로 건너뛰기
+        </a>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Navbar />
-          <main className="mx-auto w-full max-w-3xl flex-1 p-4">
+          <main id="main" className="mx-auto w-full max-w-3xl flex-1 p-4">
             {children}
           </main>
           <footer className="border-t border-neutral-200 dark:border-neutral-800">
