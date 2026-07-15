@@ -30,6 +30,7 @@ export default function Editor({
   const [title, setTitle] = useState(post.title);
   const [slug, setSlug] = useState(post.slug);
   const [slugError, setSlugError] = useState("");
+  const [tags, setTags] = useState(post.tags?.join(", ") ?? "");
   const [content, setContent] = useState(post.content_md);
   const [isDraft, setIsDraft] = useState(post.is_draft);
   const [publishedAt, setPublishedAt] = useState(toLocalInput(post.published_at));
@@ -149,32 +150,47 @@ export default function Editor({
     window.history.replaceState({}, "", editUrl(savedSlug.current, next));
   }
 
+  // Programmatic edits go through execCommand("insertText") so they join the
+  // textarea's native undo/redo stack — ⌘Z / ⌘⇧Z / ⌘Y then cover every toolbar
+  // action for free. Plain setContent would wipe that history on each edit.
+  // `sel` optionally repositions the caret after the insert.
+  function replaceRange(
+    start: number,
+    end: number,
+    text: string,
+    sel?: [number, number]
+  ) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus();
+    ta.setSelectionRange(start, end);
+    // fires a native input event → React's onChange updates `content`
+    document.execCommand("insertText", false, text);
+    if (sel) requestAnimationFrame(() => ta.setSelectionRange(sel[0], sel[1]));
+  }
+
   // --- paste/drop upload to Supabase Storage ---
   function insertAtCursor(text: string) {
     const ta = textareaRef.current;
-    setContent((prev) =>
-      ta ? prev.slice(0, ta.selectionStart) + text + prev.slice(ta.selectionEnd) : `${prev}\n${text}`
-    );
+    if (ta && document.activeElement === ta) {
+      document.execCommand("insertText", false, text); // undoable, keeps caret
+    } else {
+      setContent((prev) =>
+        ta ? prev.slice(0, ta.selectionStart) + text + prev.slice(ta.selectionEnd) : `${prev}\n${text}`
+      );
+    }
   }
 
   // --- toolbar helpers ---
-  function applyEdit(next: string, selStart: number, selEnd: number) {
-    setContent(next);
-    requestAnimationFrame(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.focus();
-      ta.setSelectionRange(selStart, selEnd);
-    });
-  }
-
   function wrapSelection(before: string, after: string, placeholder: string) {
     const ta = textareaRef.current;
     if (!ta) return;
     const { selectionStart: start, selectionEnd: end } = ta;
     const selected = content.slice(start, end) || placeholder;
-    const next = content.slice(0, start) + before + selected + after + content.slice(end);
-    applyEdit(next, start + before.length, start + before.length + selected.length);
+    replaceRange(start, end, before + selected + after, [
+      start + before.length,
+      start + before.length + selected.length,
+    ]);
   }
 
   function prefixLines(prefix: string) {
@@ -189,16 +205,19 @@ export default function Editor({
     const replaced = lines
       .map((l) => (allPrefixed ? l.slice(prefix.length) : prefix + l))
       .join("\n");
-    const next = content.slice(0, blockStart) + replaced + content.slice(blockEnd);
-    applyEdit(next, blockStart, blockStart + replaced.length);
+    replaceRange(blockStart, blockEnd, replaced, [blockStart, blockStart + replaced.length]);
   }
 
+  // ⌘Z / ⌘⇧Z / ⌘Y (undo/redo) fall through to the browser — every edit above is on
+  // its native stack, so they need no handling here.
   function handleShortcut(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (!(e.metaKey || e.ctrlKey)) return;
     const key = e.key.toLowerCase();
     if (key === "b") wrapSelection("**", "**", "굵게");
     else if (key === "i") wrapSelection("*", "*", "기울임");
     else if (key === "k") wrapSelection("[", "](url)", "텍스트");
+    else if (key === "e") wrapSelection("`", "`", "code");
+    else if (key === "s") flush(); // explicit save on top of autosave
     else return;
     e.preventDefault();
   }
@@ -278,7 +297,7 @@ export default function Editor({
     { label: "H2", title: "제목 2", run: () => prefixLines("## ") },
     { label: "H3", title: "제목 3", run: () => prefixLines("### ") },
     { label: "🔗", title: "링크 (⌘K)", run: () => wrapSelection("[", "](url)", "텍스트") },
-    { label: "`code`", title: "인라인 코드", run: () => wrapSelection("`", "`", "code") },
+    { label: "`code`", title: "인라인 코드 (⌘E)", run: () => wrapSelection("`", "`", "code") },
     { label: "```", title: "코드 블록", run: () => wrapSelection("```\n", "\n```", "code") },
     { label: ">", title: "인용", run: () => prefixLines("> ") },
     { label: "•", title: "목록", run: () => prefixLines("- ") },
@@ -329,6 +348,16 @@ export default function Editor({
           </p>
         )}
       </div>
+      <input
+        value={tags}
+        onChange={(e) => setTags(e.target.value)}
+        onBlur={() =>
+          save({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })
+        }
+        placeholder="태그 (콤마로 구분)"
+        aria-label="태그"
+        className={`${inputCls} w-full`}
+      />
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <label className="flex items-center gap-2">
