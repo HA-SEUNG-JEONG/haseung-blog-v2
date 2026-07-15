@@ -21,6 +21,12 @@ export function stripMarkdown(md: string, maxLen: number): string {
   return text.length > maxLen ? `${text.slice(0, maxLen - 1).trimEnd()}…` : text;
 }
 
+// First markdown image URL in the body — thumbnail fallback when no explicit one is set.
+// Only matches ![](...) markdown, not <img> HTML or <video> (same limit as the RPC fallback).
+export function firstImage(md: string): string | null {
+  return md.match(/!\[[^\]]*\]\(([^)]+)\)/)?.[1] ?? null;
+}
+
 // Reading time from character count (~500 Korean chars/min), floor of 1 minute.
 export function readingMinutes(chars: number): number {
   return Math.max(1, Math.round(chars / 500));

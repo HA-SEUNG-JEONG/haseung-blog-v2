@@ -13,7 +13,10 @@ export default function PostAdminBar({ post }: { post: Post }) {
       <span className="px-1 text-xs font-medium tracking-wide text-neutral-500">
         {post.is_draft ? "초안" : "발행됨"}
       </span>
-      <Link href={`/posts/${encodeURIComponent(post.slug)}?edit=1`} className={`${btn} ml-auto`}>
+      <Link
+        href={`/posts/${encodeURIComponent(post.slug)}?edit=1`}
+        className="ml-auto rounded bg-neutral-900 px-3 py-1 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-black dark:hover:bg-neutral-300"
+      >
         수정
       </Link>
       <form action={(post.is_draft ? publishPost : unpublishPost).bind(null, post.id)}>
