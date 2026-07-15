@@ -23,7 +23,8 @@ export async function signIn(formData: FormData) {
     password: String(formData.get("password")),
   });
   // no email in the URL — it lands in history and server logs
-  if (error) redirect("/admin/login?error=1");
+  // TEMP DEBUG: surface the real auth error; revert to ?error=1 after diagnosing
+  if (error) redirect(`/admin/login?error=1&msg=${encodeURIComponent(error.message)}`);
   redirect("/");
 }
 
