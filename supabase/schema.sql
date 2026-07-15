@@ -45,6 +45,18 @@ begin
 end;
 $$;
 
+-- Home list: server-side excerpt (no full content_md over the wire) + row cap.
+-- stable, no security definer => RLS anon_read still applies.
+create function list_home_posts(lim int)
+returns table (id uuid, slug text, title text, published_at timestamptz, view_count int, excerpt text)
+language sql stable set search_path = public as $$
+  select id, slug, title, published_at, view_count, left(content_md, 300) as excerpt
+  from posts
+  where is_draft = false and published_at <= now()
+  order by published_at desc
+  limit lim;
+$$;
+
 -- Storage: create bucket "uploads" (public) in dashboard, then:
 create policy "auth write uploads" on storage.objects
   for insert to authenticated with check (bucket_id = 'uploads');
