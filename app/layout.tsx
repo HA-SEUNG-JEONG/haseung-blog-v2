@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: { default: "haseung", template: "%s · haseung" },
   description: "haseung's dev blog",
+  alternates: { types: { "application/rss+xml": "/feed.xml" } },
 };
 
 // browser chrome matches the page background in both themes
