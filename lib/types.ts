@@ -7,6 +7,7 @@ export type Post = {
   published_at: string | null;
   comments_enabled: boolean;
   tags: string[];
+  thumbnail_url: string | null;
   view_count: number;
   created_at: string;
   updated_at: string;

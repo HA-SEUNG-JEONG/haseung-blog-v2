@@ -31,6 +31,7 @@ export default function Editor({
   const [slug, setSlug] = useState(post.slug);
   const [slugError, setSlugError] = useState("");
   const [tags, setTags] = useState(post.tags?.join(", ") ?? "");
+  const [thumbnailUrl, setThumbnailUrl] = useState(post.thumbnail_url ?? "");
   const [content, setContent] = useState(post.content_md);
   const [isDraft, setIsDraft] = useState(post.is_draft);
   const [publishedAt, setPublishedAt] = useState(toLocalInput(post.published_at));
@@ -41,6 +42,7 @@ export default function Editor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slugRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
 
   const save = useCallback(
     async (patch: Parameters<typeof updatePost>[1]) => {
@@ -222,26 +224,41 @@ export default function Editor({
     e.preventDefault();
   }
 
-  async function uploadFiles(files: Iterable<File>) {
+  // Upload one file to Storage, return its public URL (null on error). Shared by
+  // body inserts and the thumbnail control.
+  async function uploadToStorage(file: File): Promise<string | null> {
     const supabase = createClient();
+    setStatus("업로드 중…");
+    const ext = file.name.split(".").pop() || "bin";
+    const path = `${post.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("uploads").upload(path, file);
+    if (error) {
+      setStatus(`업로드 오류: ${error.message}`);
+      return null;
+    }
+    setStatus("업로드 완료");
+    return supabase.storage.from("uploads").getPublicUrl(path).data.publicUrl;
+  }
+
+  async function uploadFiles(files: Iterable<File>) {
     for (const file of files) {
       if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
-      setStatus("업로드 중…");
-      const ext = file.name.split(".").pop() || "bin";
-      const path = `${post.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("uploads").upload(path, file);
-      if (error) {
-        setStatus(`업로드 오류: ${error.message}`);
-        continue;
-      }
-      const { data } = supabase.storage.from("uploads").getPublicUrl(path);
+      const url = await uploadToStorage(file);
+      if (!url) continue;
       insertAtCursor(
         file.type.startsWith("video/")
-          ? `<video controls src="${data.publicUrl}"></video>`
-          : `![](${data.publicUrl})`
+          ? `<video controls src="${url}"></video>`
+          : `![](${url})`
       );
-      setStatus("업로드 완료");
     }
+  }
+
+  async function uploadThumbnail(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    const url = await uploadToStorage(file);
+    if (!url) return;
+    setThumbnailUrl(url);
+    save({ thumbnail_url: url });
   }
 
   // leave edit mode: flush pending edits, then land on the post itself (which is the preview now)
@@ -294,19 +311,28 @@ export default function Editor({
     { label: <strong>B</strong>, title: "굵게 (⌘B)", run: () => wrapSelection("**", "**", "굵게") },
     { label: <em>I</em>, title: "기울임 (⌘I)", run: () => wrapSelection("*", "*", "기울임") },
     { label: <s>S</s>, title: "취소선", run: () => wrapSelection("~~", "~~", "취소선") },
-    { label: "H2", title: "제목 2", run: () => prefixLines("## ") },
-    { label: "H3", title: "제목 3", run: () => prefixLines("### ") },
     { label: "🔗", title: "링크 (⌘K)", run: () => wrapSelection("[", "](url)", "텍스트") },
     { label: "`code`", title: "인라인 코드 (⌘E)", run: () => wrapSelection("`", "`", "code") },
     { label: "```", title: "코드 블록", run: () => wrapSelection("```\n", "\n```", "code") },
     { label: ">", title: "인용", run: () => prefixLines("> ") },
     { label: "•", title: "목록", run: () => prefixLines("- ") },
+    { label: "1.", title: "순서 목록", run: () => prefixLines("1. ") },
+    { label: "☑", title: "체크리스트", run: () => prefixLines("- [ ] ") },
+    { label: "—", title: "수평선", run: () => insertAtCursor("\n---\n") },
+    {
+      label: "표",
+      title: "표",
+      run: () => insertAtCursor("\n| 제목 | 제목 |\n| --- | --- |\n| 셀 | 셀 |\n"),
+    },
   ];
 
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="flex items-center gap-3">
-        <button onClick={done} className="text-sm text-neutral-500 hover:underline">
+        <button
+          onClick={done}
+          className="rounded border border-neutral-300 bg-neutral-100 px-3 py-1 text-sm font-medium hover:bg-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+        >
           ← 완료
         </button>
         <span
@@ -359,6 +385,46 @@ export default function Editor({
         className={`${inputCls} w-full`}
       />
 
+      <div className="flex items-center gap-3 text-sm">
+        {thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumbnailUrl}
+            alt="썸네일"
+            className="h-16 w-24 shrink-0 rounded border border-neutral-200 object-cover dark:border-neutral-800"
+          />
+        ) : (
+          <span className="text-neutral-500">
+            썸네일 미설정 — 본문 첫 이미지가 자동 사용됩니다.
+          </span>
+        )}
+        <button type="button" onClick={() => thumbInputRef.current?.click()} className="rounded border px-2.5 py-1">
+          썸네일 업로드
+        </button>
+        {thumbnailUrl && (
+          <button
+            type="button"
+            onClick={() => {
+              setThumbnailUrl("");
+              save({ thumbnail_url: null });
+            }}
+            className="rounded border px-2.5 py-1 text-neutral-500"
+          >
+            제거
+          </button>
+        )}
+        <input
+          ref={thumbInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.[0]) uploadThumbnail(e.target.files[0]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <label className="flex items-center gap-2">
           발행 시각
@@ -407,6 +473,24 @@ export default function Editor({
             <span className="mr-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
               Markdown
             </span>
+            <select
+              title="제목 레벨"
+              aria-label="제목 레벨"
+              value=""
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (n) prefixLines("#".repeat(n) + " ");
+                e.target.value = "";
+              }}
+              className={`${toolBtnCls} appearance-none`}
+            >
+              <option value="">H▾</option>
+              {[1, 2, 3, 4, 5, 6].map((n) => (
+                <option key={n} value={n}>
+                  H{n}
+                </option>
+              ))}
+            </select>
             {toolbar.map((t) => (
               <button
                 key={t.title}

@@ -50,16 +50,22 @@ $$;
 alter table posts add column tags text[] not null default '{}';
 create index idx_posts_tags on posts using gin (tags);
 
+-- Optional cover image. Null => fall back to the first ![](...) image in content_md.
+alter table posts add column thumbnail_url text;
+
 -- Home list: server-side excerpt (no full content_md over the wire) + row cap.
 -- stable, no security definer => RLS anon_read still applies.
 -- Returns tags + char_count (reading time) and takes an offset (pagination).
+-- thumbnail_url falls back to the first markdown image in the body when unset.
 drop function if exists list_home_posts(int);
+drop function if exists list_home_posts(int, int);
 create function list_home_posts(lim int, off int default 0)
 returns table (id uuid, slug text, title text, published_at timestamptz,
-               view_count int, excerpt text, tags text[], char_count int)
+               view_count int, excerpt text, tags text[], char_count int, thumbnail_url text)
 language sql stable set search_path = public as $$
   select id, slug, title, published_at, view_count,
-         left(content_md, 300) as excerpt, tags, char_length(content_md) as char_count
+         left(content_md, 300) as excerpt, tags, char_length(content_md) as char_count,
+         coalesce(thumbnail_url, substring(content_md from '!\[[^\]]*\]\(([^)]+)\)')) as thumbnail_url
   from posts
   where is_draft = false and published_at <= now()
   order by published_at desc

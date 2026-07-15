@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPostBySlug, isLive } from "@/lib/posts";
 import { getCurrentUser } from "@/lib/auth";
-import { formatDate, stripMarkdown, readingMinutes } from "@/lib/text";
+import { formatDate, stripMarkdown, readingMinutes, firstImage } from "@/lib/text";
 import Markdown from "@/components/Markdown";
 import Editor from "@/components/Editor";
 import PostAdminBar from "@/components/PostAdminBar";
@@ -25,10 +25,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!post) notFound(); // before streaming starts, so the response is a real 404
   const title = post.title || "(제목 없음)";
   const description = stripMarkdown(post.content_md, 160);
+  const thumb = post.thumbnail_url ?? firstImage(post.content_md);
   return {
     title,
     description,
-    openGraph: { title, description, type: "article" },
+    openGraph: { title, description, type: "article", images: thumb ? [thumb] : undefined },
     // a draft or a future-dated post is only reachable by the author — keep it out of search
     ...(isLive(post) ? {} : { robots: { index: false, follow: false } }),
   };
@@ -45,10 +46,20 @@ export default async function PostPage({ params, searchParams }: Props) {
 
   if (user && edit === "1") return <Editor post={post} initialPreview={preview === "1"} />;
 
+  const thumb = post.thumbnail_url ?? firstImage(post.content_md);
+
   return (
     <article>
       {live && <ReadingProgress />}
       {user && <PostAdminBar post={post} />}
+      {live && thumb && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={thumb}
+          alt=""
+          className="mb-6 h-auto max-h-96 w-full rounded-lg object-cover"
+        />
+      )}
       <h1 className="text-3xl font-bold">{post.title || "(제목 없음)"}</h1>
       <div className="mt-2 mb-8 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500 tabular-nums">
         {live ? (

@@ -12,6 +12,7 @@ type HomePost = {
   excerpt: string;
   tags: string[];
   char_count: number;
+  thumbnail_url: string | null;
 };
 
 const PAGE_SIZE = 10;
@@ -45,20 +46,31 @@ export default async function Home({
         {posts.map((post) => {
           const excerpt = stripMarkdown(post.excerpt ?? "", 120);
           return (
-            <li key={post.id} className="py-4">
-              <Link
-                href={`/posts/${post.slug}`}
-                className="text-lg font-semibold hover:underline"
-              >
-                {post.title || "(제목 없음)"}
-              </Link>
-              <p className="text-sm text-neutral-500 tabular-nums">
-                {formatDate(post.published_at)} · 조회 {post.view_count} ·{" "}
-                {readingMinutes(post.char_count)}분
-              </p>
-              <TagChips tags={post.tags} />
-              {excerpt && (
-                <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{excerpt}</p>
+            <li key={post.id} className="flex gap-4 py-4">
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/posts/${post.slug}`}
+                  className="text-lg font-semibold hover:underline"
+                >
+                  {post.title || "(제목 없음)"}
+                </Link>
+                <p className="text-sm text-neutral-500 tabular-nums">
+                  {formatDate(post.published_at)} · 조회 {post.view_count} ·{" "}
+                  {readingMinutes(post.char_count)}분
+                </p>
+                <TagChips tags={post.tags} />
+                {excerpt && (
+                  <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{excerpt}</p>
+                )}
+              </div>
+              {post.thumbnail_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={post.thumbnail_url}
+                  alt=""
+                  loading="lazy"
+                  className="h-16 w-24 shrink-0 rounded object-cover"
+                />
               )}
             </li>
           );

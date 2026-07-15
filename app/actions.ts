@@ -56,6 +56,7 @@ const UPDATABLE = [
   "published_at",
   "comments_enabled",
   "tags",
+  "thumbnail_url",
 ] as const;
 
 // Returns an error or null. `field` lets the editor render the message next to the input it belongs
