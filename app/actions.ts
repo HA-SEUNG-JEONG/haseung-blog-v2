@@ -22,9 +22,9 @@ export async function signIn(formData: FormData) {
     email,
     password: String(formData.get("password")),
   });
-  // no email in the URL — it lands in history and server logs
-  // TEMP DEBUG: surface the real auth error; revert to ?error=1 after diagnosing
-  if (error) redirect(`/admin/login?error=1&msg=${encodeURIComponent(error.message)}`);
+  // no email or raw auth error in the URL — it lands in history and server logs,
+  // and a distinct error leaks whether the account exists (email enumeration)
+  if (error) redirect("/admin/login?error=1");
   redirect("/");
 }
 
@@ -73,7 +73,8 @@ export async function updatePost(
   if ("slug" in update) {
     const slug = String(update.slug ?? "").trim();
     if (!slug) return { field: "slug", message: "slug을 입력해 주세요." };
-    if (slug.includes("/")) return { field: "slug", message: "slug에 '/'는 쓸 수 없습니다." };
+    if (!/^[a-z0-9_-]+$/i.test(slug))
+      return { field: "slug", message: "slug은 영문·숫자·-·_만 가능합니다." };
     update.slug = slug;
   }
 

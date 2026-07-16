@@ -1,9 +1,23 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeSlug from "rehype-slug";
 import rehypeHighlight from "rehype-highlight";
 import CodeBlock from "./CodeBlock";
+
+// defaultSchema (GitHub's) drops <video>, which the editor inserts for uploaded clips —
+// allow it back with its safe attributes. Nothing else needs extending: rehypeSlug (ids)
+// and rehypeHighlight (hljs classes) run *after* sanitize, so their output isn't stripped.
+const schema = {
+  ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames ?? []), "video", "source"],
+  attributes: {
+    ...defaultSchema.attributes,
+    video: ["controls", "src", "width", "height", "poster", "loop", "muted", "playsInline"],
+    source: ["src", "type"],
+  },
+};
 
 // Single markdown pipeline shared by public post pages and the editor preview.
 export default function Markdown({ children }: { children: string }) {
@@ -11,8 +25,9 @@ export default function Markdown({ children }: { children: string }) {
     <div className="prose dark:prose-invert max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        // rehypeSlug before rehypeHighlight so headings get github-slugger ids (TOC anchors).
-        rehypePlugins={[rehypeRaw, rehypeSlug, rehypeHighlight]}
+        // rehypeRaw parses embedded HTML, then rehypeSanitize strips anything unsafe (admin
+        // authors, but defense-in-depth). Slug/highlight run after so their ids/classes survive.
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, schema], rehypeSlug, rehypeHighlight]}
         components={{
           // ponytail: dimensions aren't stored on upload, so this only defers offscreen images —
           // CLS stays until width/height ride along with the uploaded URL.

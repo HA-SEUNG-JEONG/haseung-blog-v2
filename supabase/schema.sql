@@ -14,8 +14,14 @@ create table posts (
 );
 
 alter table posts enable row level security;
-create policy anon_read on posts for select using (is_draft = false);
-create policy admin_all on posts for all using (auth.role() = 'authenticated');
+-- anon sees only published, non-future posts. Enforced at the DB so a direct REST read
+-- can't surface a scheduled post the app would otherwise hide. published_at is always set
+-- on publish, so a live post is never hidden by the published_at <= now() clause.
+create policy anon_read on posts for select
+  using (is_draft = false and published_at <= now());
+-- single author: only the admin's own JWT may write. Swap the email if the author changes.
+create policy admin_all on posts for all
+  using (auth.jwt() ->> 'email' = 'test12280413@gmail.com');
 
 create index idx_posts_published on posts (published_at desc) where is_draft = false;
 
@@ -73,8 +79,10 @@ language sql stable set search_path = public as $$
 $$;
 
 -- Storage: create bucket "uploads" (public) in dashboard, then:
+-- only the admin's JWT may upload, matching the posts admin_all policy.
 create policy "auth write uploads" on storage.objects
-  for insert to authenticated with check (bucket_id = 'uploads');
+  for insert to authenticated
+  with check (bucket_id = 'uploads' and auth.jwt() ->> 'email' = 'test12280413@gmail.com');
 
 -- IMPORTANT manual steps (dashboard):
 -- 1. Auth > Sign In / Up > disable "Allow new users to sign up"
@@ -84,9 +92,16 @@ create policy "auth write uploads" on storage.objects
 -- MIGRATION (existing databases): run the post_views table + record_view and
 -- list_home_posts function blocks above in the SQL editor, then drop the old RPC:
 --   drop function if exists increment_view(text);
-
--- Optional hardening: the app hides scheduled posts (published_at > now()),
--- but direct REST reads can still see them. To enforce at the DB:
+--
+-- To bring the anon_read + admin_all + storage policies above onto an existing DB,
+-- run (email must match the admin's Supabase Auth account):
 --   drop policy anon_read on posts;
 --   create policy anon_read on posts for select
 --     using (is_draft = false and published_at <= now());
+--   drop policy admin_all on posts;
+--   create policy admin_all on posts for all
+--     using (auth.jwt() ->> 'email' = 'test12280413@gmail.com');
+--   drop policy "auth write uploads" on storage.objects;
+--   create policy "auth write uploads" on storage.objects
+--     for insert to authenticated
+--     with check (bucket_id = 'uploads' and auth.jwt() ->> 'email' = 'test12280413@gmail.com');

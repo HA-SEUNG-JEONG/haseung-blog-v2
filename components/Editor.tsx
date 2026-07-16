@@ -258,7 +258,7 @@ export default function Editor({
     const url = await uploadToStorage(file);
     if (!url) return;
     setThumbnailUrl(url);
-    save({ thumbnail_url: url });
+    await save({ thumbnail_url: url });
   }
 
   // leave edit mode: flush pending edits, then land on the post itself (which is the preview now)
@@ -377,8 +377,8 @@ export default function Editor({
       <input
         value={tags}
         onChange={(e) => setTags(e.target.value)}
-        onBlur={() =>
-          save({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })
+        onBlur={async () =>
+          await save({ tags: tags.split(",").map((t) => t.trim()).filter(Boolean) })
         }
         placeholder="태그 (콤마로 구분)"
         aria-label="태그"
@@ -404,9 +404,9 @@ export default function Editor({
         {thumbnailUrl && (
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               setThumbnailUrl("");
-              save({ thumbnail_url: null });
+              await save({ thumbnail_url: null });
             }}
             className="rounded border px-2.5 py-1 text-neutral-500"
           >
@@ -432,9 +432,9 @@ export default function Editor({
             type="datetime-local"
             value={publishedAt}
             onChange={(e) => setPublishedAt(e.target.value)}
-            onBlur={() => {
+            onBlur={async () => {
               if (!isDraft && publishedAt)
-                save({ published_at: new Date(publishedAt).toISOString() });
+                await save({ published_at: new Date(publishedAt).toISOString() });
             }}
             className={inputCls}
           />
@@ -443,9 +443,9 @@ export default function Editor({
           <input
             type="checkbox"
             checked={commentsEnabled}
-            onChange={(e) => {
+            onChange={async (e) => {
               setCommentsEnabled(e.target.checked);
-              save({ comments_enabled: e.target.checked });
+              await save({ comments_enabled: e.target.checked });
             }}
           />
           댓글

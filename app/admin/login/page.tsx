@@ -7,15 +7,15 @@ export const metadata: Metadata = { title: "관리자 로그인" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; msg?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, msg } = await searchParams;
+  const { error } = await searchParams;
   return (
     <form action={signIn} className="mx-auto mt-16 flex max-w-sm flex-col gap-3">
       <h1 className="text-xl font-bold">관리자 로그인</h1>
       {error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          로그인에 실패했습니다.{msg ? ` (${msg})` : ""}
+          로그인에 실패했습니다.
         </p>
       )}
       <input
