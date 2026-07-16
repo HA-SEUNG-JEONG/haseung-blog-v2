@@ -29,7 +29,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    openGraph: { title, description, type: "article", images: thumb ? [thumb] : undefined },
+    // No explicit images when there's no thumbnail → the opengraph-image.tsx route
+    // (a per-post generated card) is picked up automatically instead.
+    openGraph: { title, description, type: "article", ...(thumb ? { images: [thumb] } : {}) },
     // a draft or a future-dated post is only reachable by the author — keep it out of search
     ...(isLive(post) ? {} : { robots: { index: false, follow: false } }),
   };

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import Navbar from "@/components/Navbar";
+import BackToTop from "@/components/BackToTop";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -54,6 +55,7 @@ export default function RootLayout({
           <main id="main" className="mx-auto w-full max-w-3xl flex-1 p-4">
             {children}
           </main>
+          <BackToTop />
           <footer className="border-t border-neutral-200 dark:border-neutral-800">
             <div className="mx-auto w-full max-w-3xl p-4 text-sm text-neutral-500">
               <a

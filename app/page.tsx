@@ -29,16 +29,28 @@ export default async function Home({
   const supabase = await createClient();
   // RPC returns a server-side left(content_md, 300) excerpt so the full body never
   // ships to the client, plus tags + char_count for reading time.
-  const [{ data }, { count }] = await Promise.all([
+  const now = new Date().toISOString();
+  const [{ data }, { count }, { data: popular }] = await Promise.all([
     supabase.rpc("list_home_posts", { lim: PAGE_SIZE, off }),
     supabase
       .from("posts")
       .select("id", { count: "exact", head: true })
       .eq("is_draft", false)
-      .lte("published_at", new Date().toISOString()),
+      .lte("published_at", now),
+    // Popular widget (page 1 only) — direct view_count sort, no RPC.
+    page === 1
+      ? supabase
+          .from("posts")
+          .select("id, slug, title, view_count")
+          .eq("is_draft", false)
+          .lte("published_at", now)
+          .order("view_count", { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: null }),
   ]);
   const posts = (data ?? []) as HomePost[];
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const popularPosts = (popular ?? []) as Pick<HomePost, "id" | "slug" | "title" | "view_count">[];
 
   return (
     <div>
@@ -79,6 +91,27 @@ export default async function Home({
           <li className="py-4 text-neutral-500">아직 글이 없습니다.</li>
         )}
       </ul>
+
+      {popularPosts.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-2 text-sm font-semibold text-neutral-500">인기 글</h2>
+          <ol className="divide-y divide-neutral-200 dark:divide-neutral-800">
+            {popularPosts.map((post) => (
+              <li key={post.id} className="flex items-baseline justify-between gap-4 py-2">
+                <Link
+                  href={`/posts/${post.slug}`}
+                  className="min-w-0 truncate hover:underline"
+                >
+                  {post.title || "(제목 없음)"}
+                </Link>
+                <span className="shrink-0 text-sm text-neutral-500 tabular-nums">
+                  조회 {post.view_count}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {totalPages > 1 && (
         <nav

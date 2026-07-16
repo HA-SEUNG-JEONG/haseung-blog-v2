@@ -19,6 +19,9 @@ export default async function Navbar() {
         <Link href="/archive" className={linkCls}>
           아카이브
         </Link>
+        <Link href="/tags" className={linkCls}>
+          태그
+        </Link>
         <a href="/feed.xml" className={linkCls}>
           RSS
         </a>
